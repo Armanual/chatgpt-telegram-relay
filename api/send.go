@@ -8,16 +8,27 @@ import (
 	"html"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 	"unicode/utf8"
 )
 
+type inlineKeyboardButton struct {
+	Text string `json:"text"`
+	URL  string `json:"url"`
+}
+
+type inlineKeyboardMarkup struct {
+	InlineKeyboard [][]inlineKeyboardButton `json:"inline_keyboard"`
+}
+
 type telegramRequest struct {
-	ChatID                string `json:"chat_id"`
-	Text                  string `json:"text"`
-	DisableWebPagePreview bool   `json:"disable_web_page_preview"`
+	ChatID                string                `json:"chat_id"`
+	Text                  string                `json:"text"`
+	DisableWebPagePreview bool                  `json:"disable_web_page_preview"`
+	ReplyMarkup           *inlineKeyboardMarkup `json:"reply_markup,omitempty"`
 }
 
 type telegramResponse struct {
@@ -44,7 +55,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ограничиваем размер тела запроса: для тестового relay больше не нужно.
 	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
@@ -67,21 +77,46 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Добавляем серверную отметку времени, чтобы повторные тесты было легко отличать.
+	actionURL := strings.TrimSpace(r.FormValue("url"))
+	buttonText := strings.TrimSpace(r.FormValue("button"))
+	if buttonText == "" {
+		buttonText = "📨 Открыть"
+	}
+	if utf8.RuneCountInString(buttonText) > 64 {
+		http.Error(w, "button text is too long", http.StatusBadRequest)
+		return
+	}
+
+	var replyMarkup *inlineKeyboardMarkup
+	if actionURL != "" {
+		parsed, err := url.Parse(actionURL)
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || len(actionURL) > 2048 {
+			http.Error(w, "invalid action url", http.StatusBadRequest)
+			return
+		}
+		replyMarkup = &inlineKeyboardMarkup{
+			InlineKeyboard: [][]inlineKeyboardButton{{{
+				Text: buttonText,
+				URL:  actionURL,
+			}}},
+		}
+	}
+
 	text = fmt.Sprintf("%s\n\nОтправлено: %s UTC", text, time.Now().UTC().Format("2006-01-02 15:04:05"))
 
 	payload, err := json.Marshal(telegramRequest{
 		ChatID:                chatID,
 		Text:                  text,
 		DisableWebPagePreview: true,
+		ReplyMarkup:           replyMarkup,
 	})
 	if err != nil {
 		http.Error(w, "failed to build telegram request", http.StatusInternalServerError)
 		return
 	}
 
-	url := "https://api.telegram.org/bot" + botToken + "/sendMessage"
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, url, bytes.NewReader(payload))
+	telegramURL := "https://api.telegram.org/bot" + botToken + "/sendMessage"
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, telegramURL, bytes.NewReader(payload))
 	if err != nil {
 		http.Error(w, "failed to create telegram request", http.StatusInternalServerError)
 		return
