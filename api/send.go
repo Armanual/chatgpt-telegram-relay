@@ -55,7 +55,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
+	r.Body = http.MaxBytesReader(w, r.Body, 32<<10)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
 		return
@@ -77,29 +77,15 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	actionURL := strings.TrimSpace(r.FormValue("url"))
-	buttonText := strings.TrimSpace(r.FormValue("button"))
-	if buttonText == "" {
-		buttonText = "📨 Открыть"
-	}
-	if utf8.RuneCountInString(buttonText) > 64 {
-		http.Error(w, "button text is too long", http.StatusBadRequest)
+	rows, err := buildButtons(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	var replyMarkup *inlineKeyboardMarkup
-	if actionURL != "" {
-		parsed, err := url.Parse(actionURL)
-		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || len(actionURL) > 2048 {
-			http.Error(w, "invalid action url", http.StatusBadRequest)
-			return
-		}
-		replyMarkup = &inlineKeyboardMarkup{
-			InlineKeyboard: [][]inlineKeyboardButton{{{
-				Text: buttonText,
-				URL:  actionURL,
-			}}},
-		}
+	if len(rows) > 0 {
+		replyMarkup = &inlineKeyboardMarkup{InlineKeyboard: rows}
 	}
 
 	text = fmt.Sprintf("%s\n\nОтправлено: %s UTC", text, time.Now().UTC().Format("2006-01-02 15:04:05"))
@@ -165,4 +151,44 @@ h1{margin-top:0}.ok{font-size:54px;margin:0 0 12px}p{color:#aab2bd;line-height:1
 </head>
 <body><main><div class="ok">✅</div><h1>Сообщение отправлено</h1><p>Telegram Bot API принял сообщение для чата %s.</p><a href="/">Вернуться назад</a></main></body>
 </html>`, html.EscapeString(chatID))
+}
+
+func buildButtons(r *http.Request) ([][]inlineKeyboardButton, error) {
+	pairs := []struct {
+		urlKey      string
+		buttonKey   string
+		defaultText string
+	}{
+		{"url", "button", "📨 Открыть"},
+		{"url2", "button2", "Открыть 2"},
+		{"url3", "button3", "Открыть 3"},
+	}
+
+	rows := make([][]inlineKeyboardButton, 0, len(pairs))
+	for _, pair := range pairs {
+		actionURL := strings.TrimSpace(r.FormValue(pair.urlKey))
+		if actionURL == "" {
+			continue
+		}
+
+		buttonText := strings.TrimSpace(r.FormValue(pair.buttonKey))
+		if buttonText == "" {
+			buttonText = pair.defaultText
+		}
+		if !utf8.ValidString(buttonText) || utf8.RuneCountInString(buttonText) > 64 {
+			return nil, fmt.Errorf("button text is too long or invalid")
+		}
+
+		parsed, err := url.Parse(actionURL)
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || len(actionURL) > 2048 {
+			return nil, fmt.Errorf("invalid action url")
+		}
+
+		rows = append(rows, []inlineKeyboardButton{{
+			Text: buttonText,
+			URL:  actionURL,
+		}})
+	}
+
+	return rows, nil
 }
