@@ -136,3 +136,7 @@ PYTHONPATH=src python -m unittest discover -s tests
 
 Тесты проверяют SQLite repository, парсер `/add`, создание reminder-записей и security helpers.
 
+
+## Vercel domain note
+
+Use the production domain shown in Vercel Deployments or Domains when setting Telegram webhook.
