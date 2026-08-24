@@ -1,13 +1,20 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "headers": [
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
     {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" },
-        { "key": "Referrer-Policy", "value": "no-referrer" },
-        { "key": "X-Frame-Options", "value": "DENY" }
-      ]
+      "source": "/api/(.*)",
+      "destination": "/api/index.py"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/reminders",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
+
