@@ -57,7 +57,10 @@ class TelegramClient:
         if not self.base_url:
             return {"ok": True, "dry_run": True, "method": "setWebhook", "payload": payload}
         async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.post(f"{self.base_url}/setWebhook", json=payload)
+            try:
+                response = await client.post(f"{self.base_url}/setWebhook", json=payload)
+            except httpx.HTTPError as exc:
+                return {"ok": False, "error": str(exc)}
             if response.status_code >= 400:
                 return {
                     "ok": False,
