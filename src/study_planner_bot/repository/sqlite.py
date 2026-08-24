@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import os
 from contextlib import contextmanager
 from datetime import datetime, time
 from pathlib import Path
@@ -24,7 +25,10 @@ class SQLiteRepository(Repository):
         raw_path = database_url.removeprefix("sqlite:///")
         self.path = Path(raw_path)
         if not self.path.is_absolute():
-            self.path = Path.cwd() / self.path
+            if os.getenv("VERCEL"):
+                self.path = Path("/tmp") / self.path.name
+            else:
+                self.path = Path.cwd() / self.path
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
@@ -369,4 +373,3 @@ def _reminder_from_row(row: sqlite3.Row) -> Reminder:
         sent_at=_parse_dt(row["sent_at"]),
         created_at=_parse_dt(row["created_at"]),
     )
-
