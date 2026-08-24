@@ -67,7 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ) -> dict[str, Any]:
         provided_secret = x_relay_secret or bearer_value(authorization)
         _require_secret(provided_secret, resolved_settings.relay_secret, "Invalid relay secret")
-        webhook_url = str(request.url_for("telegram_webhook"))
+        webhook_url = str(request.url_for("telegram_webhook")).replace("http://", "https://", 1)
         result = await telegram.set_webhook(webhook_url, resolved_settings.telegram_webhook_secret)
         return {"ok": True, "webhook_url": webhook_url, "telegram": result}
 
