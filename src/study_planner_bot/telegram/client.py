@@ -46,3 +46,17 @@ class TelegramClient:
             response.raise_for_status()
             return response.json()
 
+    async def set_webhook(self, url: str, secret_token: str | None = None) -> dict:
+        payload: dict[str, object] = {
+            "url": url,
+            "drop_pending_updates": True,
+            "allowed_updates": ["message", "callback_query"],
+        }
+        if secret_token:
+            payload["secret_token"] = secret_token
+        if not self.base_url:
+            return {"ok": True, "dry_run": True, "method": "setWebhook", "payload": payload}
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(f"{self.base_url}/setWebhook", json=payload)
+            response.raise_for_status()
+            return response.json()
