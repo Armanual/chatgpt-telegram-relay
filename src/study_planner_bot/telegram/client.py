@@ -58,5 +58,10 @@ class TelegramClient:
             return {"ok": True, "dry_run": True, "method": "setWebhook", "payload": payload}
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.post(f"{self.base_url}/setWebhook", json=payload)
-            response.raise_for_status()
+            if response.status_code >= 400:
+                return {
+                    "ok": False,
+                    "status_code": response.status_code,
+                    "body": response.text,
+                }
             return response.json()
