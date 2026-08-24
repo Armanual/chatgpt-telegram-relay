@@ -59,6 +59,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         update = await request.json()
         return await handler.handle(update)
 
+    @app.api_route("/api/telegram/set-webhook", methods=["GET", "POST"])
+    async def set_telegram_webhook(
+        request: Request,
+        authorization: str | None = Header(default=None),
+        x_relay_secret: str | None = Header(default=None),
+    ) -> dict[str, Any]:
+        provided_secret = x_relay_secret or bearer_value(authorization)
+        _require_secret(provided_secret, resolved_settings.relay_secret, "Invalid relay secret")
+        webhook_url = str(request.url_for("telegram_webhook"))
+        result = await telegram.set_webhook(webhook_url, resolved_settings.telegram_webhook_secret)
+        return {"ok": True, "webhook_url": webhook_url, "telegram": result}
+
     @app.post("/api/relay")
     @app.post("/api/telegram/relay")
     @app.post("/api/notify")
